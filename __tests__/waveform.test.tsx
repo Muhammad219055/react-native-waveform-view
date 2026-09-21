@@ -2,7 +2,7 @@ import React from 'react';
 import { View } from 'react-native';
 import { act, create, ReactTestRenderer } from 'react-test-renderer';
 import { Path } from 'react-native-svg';
-import Waveform from '../src/Waveform';
+import Waveform, { resampleDetail } from '../src/Waveform';
 
 let mockHandlers: Record<string, (...args: any[]) => void> = {};
 jest.mock('react-native-gesture-handler', () => ({
@@ -97,6 +97,33 @@ function getPositionMs(): number {
   return mockSharedValues[0].value;
 }
 
+describe('resampleDetail', () => {
+  test('omitted msPerBar is a no-op — returns detail/detailMs unchanged (the default)', () => {
+    const source = [0.1, 0.2, 0.3, 0.4];
+    expect(resampleDetail(source, 100)).toEqual({ detail: source, detailMs: 100 });
+  });
+
+  test('groups adjacent values by average when msPerBar is a multiple of detailMs', () => {
+    const source = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0];
+    const result = resampleDetail(source, 100, 200);
+    expect(result.detailMs).toBe(200);
+    expect(result.detail).toEqual([0.1, 0.5, 0.9]);
+  });
+
+  test('a trailing partial group still averages just what it has', () => {
+    const source = [0.0, 0.2, 0.4, 0.6, 0.8];
+    const result = resampleDetail(source, 100, 300);
+    expect(result.detailMs).toBe(300);
+    expect(result.detail[0]).toBeCloseTo(0.2);
+    expect(result.detail[1]).toBeCloseTo(0.7);
+  });
+
+  test('msPerBar below detailMs is clamped up — cannot synthesize finer detail than was decoded', () => {
+    const source = [0.1, 0.2, 0.3];
+    expect(resampleDetail(source, 100, 40)).toEqual({ detail: source, detailMs: 100 });
+  });
+});
+
 describe('gesture interactions', () => {
   test('dragging left moves forward by exactly one bar (100ms) per bar-width of finger travel', () => {
     const onSeekEnd = mount({ progress: 0.5 });
@@ -135,6 +162,133 @@ describe('gesture interactions', () => {
     expect(detail.length).toBe(13800);
     expect(paths.length).toBeGreaterThan(0);
     expect(paths.length).toBeLessThanOrEqual(2 * 13);
+  });
+
+  test('msPerBar makes a drag of one bar-width move that many ms, not detailMs', () => {
+    // 5 source slices (500ms) grouped into each drawn bar.
+    const onSeekEnd = mount({ progress: 0.5, msPerBar: 500 });
+    act(() => {
+      mockHandlers.onStart();
+      mockHandlers.onUpdate({ translationX: -1 * BAR_PITCH });
+      mockHandlers.onEnd({ velocityX: 0 });
+    });
+    expect(onSeekEnd.mock.calls[0][0] * DURATION_MS).toBeCloseTo(DURATION_MS / 2 + 500);
+  });
+});
+
+describe('playhead line customization', () => {
+  // Same reasoning as the handle: the slot (fixed width/height, array style)
+  // wraps a preset/injected child whose own style is a plain object — search
+  // for that shape rather than by child position or composite/host layering.
+  const findSlot = (width: number) =>
+    renderer.root.findAll(
+      node => node.type === View && node.props.style?.some?.((s: any) => s?.width === width && s?.height !== undefined && s?.left !== undefined),
+    )[0];
+  const findPresetShape = (width: number) =>
+    findSlot(width).findAll(node => node.type === View && node.props.style && !Array.isArray(node.props.style));
+
+  test('a "line" playhead is shown by default, matching the original hardcoded look', () => {
+    mount({ progress: 0.5 });
+    const shapes = findPresetShape(2);
+    expect(shapes.length).toBe(1);
+    expect(shapes[0].props.style).toMatchObject({ width: 2, borderRadius: 1, backgroundColor: '#FFFFFF' });
+  });
+
+  test('playheadWidth and playheadColor override independently', () => {
+    mount({ progress: 0.5, playheadColor: '#22D3EE', playheadWidth: 4 });
+    const shapes = findPresetShape(4);
+    expect(shapes[0].props.style).toMatchObject({ width: 4, backgroundColor: '#22D3EE' });
+  });
+
+  test.each([
+    ['thick', { width: 4 }],
+    ['dashed', { width: 0, borderLeftWidth: 2, borderStyle: 'dashed' }],
+    ['glow', { width: 2, shadowRadius: 6 }],
+  ] as const)('playheadPreset="%s" draws that style', (preset, expected) => {
+    mount({ progress: 0.5, playheadPreset: preset });
+    expect(findPresetShape(2)[0].props.style).toMatchObject(expected);
+  });
+
+  test('playheadPreset="none" shows an empty slot, not a line', () => {
+    mount({ progress: 0.5, playheadPreset: 'none' });
+    expect(findPresetShape(2).length).toBe(0);
+  });
+
+  test('renderPlayhead fully replaces the preset, receiving the resolved color/width/height', () => {
+    const renderPlayhead = jest.fn(() => <View testID="custom-playhead" />);
+    mount({ progress: 0.5, playheadColor: '#F472B6', playheadWidth: 3, height: 64, renderPlayhead });
+    expect(renderPlayhead).toHaveBeenCalledWith({ color: '#F472B6', width: 3, height: 64 });
+    expect(renderer.root.findByProps({ testID: 'custom-playhead' })).toBeTruthy();
+  });
+});
+
+describe('handle customization', () => {
+  // The slot is the outer positioned box (array style; React Native's View
+  // shows up as a composite instance wrapping a host instance, both carrying
+  // that same array, so child-index lookups land on the wrong layer). Presets
+  // are the only Views in this component with a plain (non-array) style
+  // object, so searching for that shape finds the real preset/injected node
+  // regardless of how many composite/host layers sit above it.
+  const findSlot = (radius: number) =>
+    renderer.root.findAll(
+      node => node.type === View && node.props.style?.some?.((s: any) => s?.width === radius * 2 && s?.height === radius * 2),
+    )[0];
+  const findPresetShape = (radius: number) =>
+    findSlot(radius).findAll(node => node.type === View && node.props.style && !Array.isArray(node.props.style));
+
+  test('a "dot" handle is shown by default, sized and coloured to match the playhead', () => {
+    mount({ progress: 0.5 });
+    const shapes = findPresetShape(5);
+    expect(shapes.length).toBe(1);
+    expect(shapes[0].props.style).toMatchObject({ width: 10, height: 10, borderRadius: 5, backgroundColor: '#FFFFFF' });
+  });
+
+  test('showHandle={false} renders no handle at all', () => {
+    mount({ progress: 0.5, showHandle: false });
+    expect(findSlot(5)).toBeUndefined();
+  });
+
+  test('handleColor and handleRadius override independently of the playhead', () => {
+    mount({ progress: 0.5, playheadColor: '#000000', handleColor: '#A855F7', handleRadius: 8 });
+    const shapes = findPresetShape(8);
+    expect(shapes.length).toBe(1);
+    expect(shapes[0].props.style).toMatchObject({ backgroundColor: '#A855F7' });
+  });
+
+  test.each([
+    ['ring', { borderWidth: 2, borderColor: '#FFFFFF' }],
+    ['pill', { width: 5.5, height: 13 }],
+    ['bar', { width: 15, height: 3.5 }],
+  ] as const)('handlePreset="%s" draws that shape', (preset, expected) => {
+    mount({ progress: 0.5, handlePreset: preset });
+    expect(findPresetShape(5)[0].props.style).toMatchObject(expected);
+  });
+
+  test('handlePreset="none" shows an empty slot, not a shape', () => {
+    mount({ progress: 0.5, handlePreset: 'none' });
+    expect(findPresetShape(5).length).toBe(0);
+  });
+
+  test('renderHandle fully replaces the preset, receiving the resolved color/radius', () => {
+    const renderHandle = jest.fn(() => <View testID="custom-handle" />);
+    mount({ progress: 0.5, handleColor: '#22D3EE', handleRadius: 7, renderHandle });
+    expect(renderHandle).toHaveBeenCalledWith({ color: '#22D3EE', radius: 7, dragging: false });
+    expect(renderer.root.findByProps({ testID: 'custom-handle' })).toBeTruthy();
+  });
+
+  test('renderHandle sees live dragging state, true while scrubbing and false again on release', () => {
+    const renderHandle = jest.fn(() => <View />);
+    mount({ progress: 0.5, renderHandle });
+    expect(renderHandle.mock.calls.at(-1)?.[0].dragging).toBe(false);
+
+    act(() => mockHandlers.onStart());
+    expect(renderHandle.mock.calls.at(-1)?.[0].dragging).toBe(true);
+
+    act(() => {
+      mockHandlers.onUpdate({ translationX: 0 });
+      mockHandlers.onEnd({ velocityX: 0 });
+    });
+    expect(renderHandle.mock.calls.at(-1)?.[0].dragging).toBe(false);
   });
 });
 

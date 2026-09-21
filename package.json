@@ -13,6 +13,7 @@
     "android",
     "ios",
     "react-native-waveform-view.podspec",
+    "*.svg",
     "!android/build",
     "!android/.gradle",
     "!ios/build",
@@ -59,14 +60,14 @@
     "audio-scrubber"
   ],
   "license": "MIT",
-  "author": "Solutions Loft <muhammad.arshad@solutionsloft.com>",
-  "homepage": "https://github.com/MuhammadArshad-dev/rn-waveform#readme",
+  "author": "Muhammad Arshad <mki_15@outlook.com>",
+  "homepage": "https://github.com/Muhammad219055/react-native-waveform-view#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/MuhammadArshad-dev/rn-waveform.git"
+    "url": "https://github.com/Muhammad219055/react-native-waveform-view.git"
   },
   "bugs": {
-    "url": "https://github.com/MuhammadArshad-dev/rn-waveform/issues"
+    "url": "https://github.com/Muhammad219055/react-native-waveform-view/issues"
   },
   "peerDependencies": {
     "react": "*",

@@ -148,6 +148,30 @@ export function resolveGradientStops(gradient: WaveformGradient | undefined): Wa
   return null;
 }
 
+/**
+ * Groups adjacent `detail` values so each bar covers `msPerBar` instead of
+ * `detailMs`. `msPerBar` can't go finer than the decoded resolution — there's
+ * no real data to show — so it's clamped up to `detailMs`, which is also the
+ * default: omitted, this is a no-op and returns `detail`/`detailMs` as-is.
+ */
+export function resampleDetail(
+  detail: readonly number[],
+  detailMs: number,
+  msPerBar?: number,
+): { detail: readonly number[]; detailMs: number } {
+  if (!msPerBar || msPerBar <= detailMs || detail.length === 0) return { detail, detailMs };
+  const groupSize = Math.round(msPerBar / detailMs);
+  if (groupSize <= 1) return { detail, detailMs };
+  const out: number[] = [];
+  for (let i = 0; i < detail.length; i += groupSize) {
+    const end = Math.min(detail.length, i + groupSize);
+    let sum = 0;
+    for (let j = i; j < end; j++) sum += detail[j];
+    out.push(sum / (end - i));
+  }
+  return { detail: out, detailMs: groupSize * detailMs };
+}
+
 export function sampleGradientColor(stops: WaveformGradientStop[], level: number): string {
   if (stops.length === 0) return '#FFFFFF';
   const clamped = Math.max(0, Math.min(1, level));
@@ -165,11 +189,68 @@ export function sampleGradientColor(stops: WaveformGradientStop[], level: number
   return stops[stops.length - 1].color;
 }
 
+export type WaveformHandlePreset = 'dot' | 'ring' | 'pill' | 'bar' | 'none';
+
+/** A preset's box, sized off `radius`; centered by its parent slot regardless of its own aspect ratio. */
+function presetHandleBox(preset: WaveformHandlePreset, radius: number, color: string): ViewStyle | null {
+  switch (preset) {
+    case 'none':
+      return null;
+    case 'ring':
+      return { width: radius * 2, height: radius * 2, borderRadius: radius, borderWidth: 2, borderColor: color };
+    case 'pill': {
+      const w = radius * 1.1;
+      const h = radius * 2.6;
+      return { width: w, height: h, borderRadius: Math.min(w, h) / 2, backgroundColor: color };
+    }
+    case 'bar': {
+      const w = radius * 3;
+      const h = Math.max(3, radius * 0.7);
+      return { width: w, height: h, borderRadius: h / 2, backgroundColor: color };
+    }
+    case 'dot':
+    default:
+      return { width: radius * 2, height: radius * 2, borderRadius: radius, backgroundColor: color };
+  }
+}
+
+export type WaveformPlayheadPreset = 'line' | 'thick' | 'dashed' | 'glow' | 'none';
+
+/** A preset's own box; centered in its slot regardless of how wide it renders. */
+function presetPlayheadBox(preset: WaveformPlayheadPreset, width: number, color: string, height: number): ViewStyle | null {
+  switch (preset) {
+    case 'none':
+      return null;
+    case 'thick':
+      return { width: width * 2, height, backgroundColor: color, borderRadius: width };
+    case 'dashed':
+      // RN's border-style trick: a zero-width box with a dashed left border
+      // draws a dashed vertical line — there's no dashed-fill primitive.
+      return { width: 0, height, borderLeftWidth: width, borderStyle: 'dashed', borderColor: color };
+    case 'glow':
+      return {
+        width, height, backgroundColor: color, borderRadius: width / 2,
+        shadowColor: color, shadowOpacity: 0.9, shadowRadius: 6, shadowOffset: { width: 0, height: 0 }, elevation: 6,
+      };
+    case 'line':
+    default:
+      return { width, height, backgroundColor: color, borderRadius: width / 2 };
+  }
+}
+
 export type WaveformProps = {
   /** Normalized levels (0..1), one per `detailMs`. See `useWaveform().detail`. */
   detail: readonly number[];
   /** Milliseconds each level covers. */
   detailMs?: number;
+  /**
+   * Milliseconds a single drawn bar should represent. Adjacent `detail`
+   * values are averaged together to make coarser bars. Can't go finer than
+   * `detailMs` — there's no decoded data between slices to show — so smaller
+   * values are clamped up to it. Defaults to `detailMs`: one bar per decoded
+   * slice, today's default resolution.
+   */
+  msPerBar?: number;
   durationMs: number;
   /** Current playback position as 0..1. */
   progress: number;
@@ -196,6 +277,32 @@ export type WaveformProps = {
   /** Gradient for upcoming bars across the horizontal timeline. */
   upcomingGradient?: WaveformGradient;
   playheadColor?: string;
+  /** Playhead line thickness in dp. Defaults to `2`. */
+  playheadWidth?: number;
+  /** Built-in playhead line style. Ignored if `renderPlayhead` is set. Defaults to `'line'`. */
+  playheadPreset?: WaveformPlayheadPreset;
+  /**
+   * Renders your own playhead line instead of a preset. Centered in a
+   * `playheadWidth`-wide slot spanning the full height; return something
+   * wider or narrower and it still centers correctly.
+   */
+  renderPlayhead?: (info: { color: string; width: number; height: number }) => React.ReactNode;
+  /** Draggable-looking knob on the playhead. Defaults to `true`. */
+  showHandle?: boolean;
+  /** Handle colour. Defaults to `playheadColor`. */
+  handleColor?: string;
+  /** Handle size in dp — also the size of the slot `renderHandle` centers in. */
+  handleRadius?: number;
+  /** Built-in handle shape. Ignored if `renderHandle` is set. Defaults to `'dot'`. */
+  handlePreset?: WaveformHandlePreset;
+  /**
+   * Renders your own handle instead of a preset — an Image, Lottie, icon,
+   * anything. Centered in a `handleRadius`-sized slot at the playhead; return
+   * something bigger or smaller and it still centers correctly. `dragging` is
+   * live React state (not a worklet value), so it's safe to use directly in
+   * your JSX/styles.
+   */
+  renderHandle?: (info: { color: string; radius: number; dragging: boolean }) => React.ReactNode;
   /**
    * Colour the edges fade into — set this to the background behind the view.
    * Omit for no fade.
@@ -294,8 +401,9 @@ const Chunk = memo(({ index, detail, color, gradientStops, idPrefix, height, bar
  * Drag to scrub, fling to glide; the audio is seeked once, on release.
  */
 export default function Waveform({
-  detail,
-  detailMs = 100,
+  detail: rawDetail,
+  detailMs: rawDetailMs = 100,
+  msPerBar,
   durationMs,
   progress,
   isPlaying = false,
@@ -310,6 +418,14 @@ export default function Waveform({
   upcomingColor = '#E5E7EB',
   upcomingGradient,
   playheadColor = '#FFFFFF',
+  playheadWidth = 2,
+  playheadPreset = 'line',
+  renderPlayhead,
+  showHandle = true,
+  handleColor = playheadColor,
+  handleRadius = 5,
+  handlePreset = 'dot',
+  renderHandle,
   fadeColor,
   fadeWidth = 64,
   barWidth = 3,
@@ -318,6 +434,13 @@ export default function Waveform({
   timestampStyle,
   timestampContainerStyle,
 }: WaveformProps) {
+  // Grouped into coarser bars first (a no-op unless msPerBar is set), then
+  // every position/scroll/gesture calculation below works in bar-time the
+  // same way it always has — they only ever see `detailMs`, never `msPerBar`.
+  const { detail, detailMs } = useMemo(
+    () => resampleDetail(rawDetail, rawDetailMs, msPerBar),
+    [rawDetail, rawDetailMs, msPerBar],
+  );
   const pitch = barWidth + barGap;
   const [width, setWidth] = useState(0);
   const half = width / 2;
@@ -433,8 +556,16 @@ export default function Waveform({
   // through a ref so the gesture — and its worklets — are built only once.
   const callbacks = useRef({ onSeekStart, onSeekEnd, durationMs });
   callbacks.current = { onSeekStart, onSeekEnd, durationMs };
-  const startSeek = () => callbacks.current.onSeekStart?.();
+  // Plain React state, for renderHandle — a worklet's `dragging` shared value
+  // isn't readable from JS render. setIsDragging is stable across renders, so
+  // it's safe to call even from an older, memoized gesture closure below.
+  const [isDragging, setIsDragging] = useState(false);
+  const startSeek = () => {
+    setIsDragging(true);
+    callbacks.current.onSeekStart?.();
+  };
   const finishSeek = (ms: number) => {
+    setIsDragging(false);
     const { onSeekEnd: end, durationMs: total } = callbacks.current;
     if (end && total > 0) end(Math.max(0, Math.min(1, ms / total)));
   };
@@ -552,7 +683,30 @@ export default function Waveform({
                 <Rect x={Math.max(0, width - fadeWidth)} y="0" width={fadeWidth} height={height} fill="url(#rightFade)" />
               </Svg>
             )}
-            <View pointerEvents="none" style={[styles.playhead, { left: half - 1, height, backgroundColor: playheadColor }]} />
+            <View pointerEvents="none" style={[styles.playheadSlot, { left: half - playheadWidth / 2, width: playheadWidth, height }]}>
+              {renderPlayhead
+                ? renderPlayhead({ color: playheadColor, width: playheadWidth, height })
+                : (() => {
+                    const box = presetPlayheadBox(playheadPreset, playheadWidth, playheadColor, height);
+                    return box ? <View style={box} /> : null;
+                  })()}
+            </View>
+            {showHandle && (
+              <View
+                pointerEvents="none"
+                style={[
+                  styles.handleSlot,
+                  { left: half - handleRadius, top: -handleRadius, width: handleRadius * 2, height: handleRadius * 2 },
+                ]}
+              >
+                {renderHandle
+                  ? renderHandle({ color: handleColor, radius: handleRadius, dragging: isDragging })
+                  : (() => {
+                      const box = presetHandleBox(handlePreset, handleRadius, handleColor);
+                      return box ? <View style={box} /> : null;
+                    })()}
+              </View>
+            )}
             {showTimestamp && (
               <Animated.View
                 pointerEvents="none"
@@ -581,7 +735,8 @@ const styles = StyleSheet.create({
   trackStart: { left: 0 },
   fade: { position: 'absolute', top: 0, left: 0 },
   chunk: { position: 'absolute', top: 0 },
-  playhead: { position: 'absolute', top: 0, width: 2, borderRadius: 1 },
+  playheadSlot: { position: 'absolute', top: 0, alignItems: 'center', justifyContent: 'center' },
+  handleSlot: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
   bubble: { position: 'absolute', width: 64, borderRadius: 16, backgroundColor: '#fff', zIndex: 2 },
   timestamp: { color: '#111', padding: 4, fontSize: 12, textAlign: 'center' },
 });

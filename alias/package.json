@@ -4,17 +4,27 @@
   "description": "Short alias for react-native-waveform-view: a React Native audio waveform view with a scrolling waveform scrubber.",
   "main": "index.js",
   "types": "index.d.ts",
-  "files": ["index.js", "index.d.ts"],
-  "keywords": ["react-native", "audio", "waveform", "audio-waveform", "scrubber"],
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "LICENSE"
+  ],
+  "keywords": [
+    "react-native",
+    "audio",
+    "waveform",
+    "audio-waveform",
+    "scrubber"
+  ],
   "license": "MIT",
-  "author": "Solutions Loft <muhammad.arshad@solutionsloft.com>",
-  "homepage": "https://github.com/MuhammadArshad-dev/rn-waveform#readme",
+  "author": "Muhammad Arshad <mki_15@outlook.com>",
+  "homepage": "https://github.com/Muhammad219055/react-native-waveform-view#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/MuhammadArshad-dev/rn-waveform.git"
+    "url": "https://github.com/Muhammad219055/react-native-waveform-view.git"
   },
   "bugs": {
-    "url": "https://github.com/MuhammadArshad-dev/rn-waveform/issues"
+    "url": "https://github.com/Muhammad219055/react-native-waveform-view/issues"
   },
   "dependencies": {
     "react-native-waveform-view": "^0.1.0-beta.1"

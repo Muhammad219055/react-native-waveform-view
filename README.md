@@ -1,22 +1,19 @@
-# react-native-waveform-view
+<p align="center">
+  <img src="banner.svg" alt="react-native-waveform-view — an animated audio waveform with a purple playhead scrubbing across it, on loop" width="800" />
+</p>
 
-**React Native audio waveform** view with a scrolling waveform scrubber, for Android and iOS.
+<p align="center">
+  <a href="https://www.npmjs.com/package/react-native-waveform-view"><img src="https://img.shields.io/npm/v/react-native-waveform-view?color=A855F7&labelColor=0E144D&style=flat-square" alt="npm" /></a>
+  <a href="https://www.npmjs.com/package/react-native-waveform-view"><img src="https://img.shields.io/npm/dw/react-native-waveform-view?color=A855F7&labelColor=0E144D&style=flat-square" alt="downloads" /></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/npm/l/react-native-waveform-view?color=A855F7&labelColor=0E144D&style=flat-square" alt="license" /></a>
+  <img src="https://img.shields.io/badge/platforms-Android%20%7C%20iOS-A855F7?labelColor=0E144D&style=flat-square" alt="Android | iOS" />
+</p>
 
 Also published as [`rn-waveform`](https://www.npmjs.com/package/rn-waveform) — same package, shorter name.
-
-[![npm](https://img.shields.io/npm/v/react-native-waveform-view)](https://www.npmjs.com/package/react-native-waveform-view)
-[![downloads](https://img.shields.io/npm/dw/react-native-waveform-view)](https://www.npmjs.com/package/react-native-waveform-view)
-[![license](https://img.shields.io/npm/l/react-native-waveform-view)](./LICENSE)
 
 A close-up audio waveform that **scrolls under a fixed playhead**, stays in sync with **your** player, and works on audio of any length — voice notes, podcasts, interviews, lectures.
 
 One bar per 100ms of audio, so bars follow individual words and pauses whether the file is 30 seconds or two hours. Drag to scrub, fling to glide, and the audio seeks once, on release.
-
-```
-        played │ upcoming
-   ▁▃▅█▇▅▃▁▂▄▆█│▆▄▂▁▃▅▇█▅▃▁▂▄▆█▅▃
-               ▲ playhead (fixed)
-```
 
 ## Why another React Native waveform library?
 
@@ -101,7 +98,8 @@ cacheWaveform(path, await db.load(path));         // useWaveform() returns insta
 | Prop | Type | Default | Notes |
 | --- | --- | --- | --- |
 | `detail` | `number[]` | required | Normalized levels (0..1), one per `detailMs` |
-| `detailMs` | `number` | `100` | Milliseconds per level |
+| `detailMs` | `number` | `100` | Milliseconds per decoded level |
+| `msPerBar` | `number` | `detailMs` | Milliseconds a single drawn bar represents. Groups adjacent `detail` values by average for coarser bars; can't go finer than `detailMs` — smaller values are clamped up to it |
 | `durationMs` | `number` | required | |
 | `progress` | `number` | required | Playback position as 0..1 |
 | `isPlaying` | `boolean` | `false` | Drives the internal clock |
@@ -110,7 +108,16 @@ cacheWaveform(path, await db.load(path));         // useWaveform() returns insta
 | `onSeekStart` | `() => void` | | Fires when a drag begins |
 | `onSeekEnd` | `(progress: number) => void` | | Fires once, on release |
 | `height` | `number` | `64` | |
-| `playedColor` / `upcomingColor` / `playheadColor` | `string` | | |
+| `playedColor` / `upcomingColor` / `playheadColor` | `string` | | Flat bar colors |
+| `playedGradient` / `upcomingGradient` | `boolean \| { flat?, normal?, peak? } \| { level, color }[] \| string[]` | | Colors each bar by its own loudness instead of a flat color. `true` uses the default yellow→green→red; see [Customization](#customization) |
+| `playheadWidth` | `number` | `2` | Line thickness in dp |
+| `playheadPreset` | `'line' \| 'thick' \| 'dashed' \| 'glow' \| 'none'` | `'line'` | Ignored if `renderPlayhead` is set |
+| `renderPlayhead` | `(info: { color, width, height }) => ReactNode` | | Render your own playhead line instead of a preset |
+| `showHandle` | `boolean` | `true` | Draggable-looking knob on the playhead |
+| `handleColor` | `string` | `playheadColor` | |
+| `handleRadius` | `number` | `5` | Also the size of the slot `renderHandle` centers in |
+| `handlePreset` | `'dot' \| 'ring' \| 'pill' \| 'bar' \| 'none'` | `'dot'` | Ignored if `renderHandle` is set |
+| `renderHandle` | `(info: { color, radius, dragging }) => ReactNode` | | Render your own handle — an Image, Lottie, icon, anything. `dragging` is live React state, safe to use directly |
 | `fadeColor` | `string` | | Background colour the edges fade into; omit for no fade |
 | `fadeWidth` | `number` | `64` | |
 | `barWidth` / `barGap` | `number` | `3` / `2` | |
@@ -125,8 +132,149 @@ Omit `onSeekEnd` to make the waveform display-only.
 - `getDurationSeconds(path)` → `Promise<number>`
 - `cacheWaveform` / `getCachedWaveform` / `clearWaveformCache`
 - `normalizeLoudness(values)` — maps stored 0..1 loudness onto a 40dB display range
+- `resampleDetail(detail, detailMs, msPerBar?)` — the pure function behind the `msPerBar` prop, if you want the grouped values yourself
 
 `samples` is a whole-file overview (64 bars by default) if you also want a fixed-width waveform.
+
+## Customization
+
+Same waveform, same shape — only the props change.
+
+<table>
+<tr>
+<td align="center" width="33%">
+<img src="example-default.svg" width="260" alt="Default: purple played bars, light grey upcoming, white handle" />
+<br /><sub><b>Default</b></sub>
+</td>
+<td align="center" width="33%">
+<img src="example-theme.svg" width="260" alt="Custom theme: cyan played bars, dark slate upcoming, cyan handle" />
+<br /><sub><b>Custom theme</b></sub>
+</td>
+<td align="center" width="33%">
+<img src="example-intensity.svg" width="260" alt="Intensity gradient: each bar colored yellow to green to red by its own loudness, quiet to loud" />
+<br /><sub><b>Intensity gradient</b></sub>
+</td>
+</tr>
+</table>
+
+```tsx
+// Default
+<Waveform playedColor="#A855F7" upcomingColor="#E5E7EB" />
+
+// Custom theme
+<Waveform
+  playedColor="#22D3EE"
+  upcomingColor="#334155"
+  playheadColor="#22D3EE"
+  handleColor="#22D3EE"
+/>
+
+// Intensity gradient — each bar is colored by its own loudness (quiet → loud),
+// not by played/upcoming. true uses the default yellow → green → red stops.
+<Waveform playedGradient upcomingGradient />
+
+// ...or pick your own stops:
+<Waveform playedGradient={{ flat: '#38BDF8', normal: '#A855F7', peak: '#F472B6' }} />
+```
+
+The playhead's handle has built-in presets, or skip them entirely and render your own:
+
+<table>
+<tr>
+<td align="center" width="33%">
+<img src="handle-dot.svg" width="176" alt="Dot preset: a filled purple circle on the playhead" />
+<br /><sub><code>'dot'</code> (default)</sub>
+</td>
+<td align="center" width="33%">
+<img src="handle-ring.svg" width="176" alt="Ring preset: a hollow purple circle outline on the playhead" />
+<br /><sub><code>'ring'</code></sub>
+</td>
+<td align="center" width="33%">
+<img src="handle-pill.svg" width="176" alt="Pill preset: a rounded purple capsule on the playhead" />
+<br /><sub><code>'pill'</code></sub>
+</td>
+</tr>
+<tr>
+<td align="center" width="33%">
+<img src="handle-bar.svg" width="176" alt="Bar preset: a short flat purple cap on the playhead" />
+<br /><sub><code>'bar'</code></sub>
+</td>
+<td align="center" width="33%">
+<img src="handle-none.svg" width="176" alt="None preset: just the playhead line, no handle at all" />
+<br /><sub><code>'none'</code></sub>
+</td>
+<td align="center" width="33%">
+<img src="handle-custom.svg" width="176" alt="Custom example: a glowing pink star rendered via renderHandle instead of a preset" />
+<br /><sub><code>renderHandle</code> — anything you want</sub>
+</td>
+</tr>
+</table>
+
+```tsx
+<Waveform handlePreset="ring" />
+
+// renderHandle fully replaces the preset — an Image, Lottie, icon, anything.
+// dragging is live React state, so it's safe to use directly in your styles.
+// This is the star pictured above.
+<Waveform
+  renderHandle={({ color, radius, dragging }) => (
+    <Text style={{
+      fontSize: radius * 3, color, lineHeight: radius * 3,
+      transform: [{ scale: dragging ? 1.3 : 1 }],
+    }}>★</Text>
+  )}
+/>
+```
+
+The line itself — not just the knob on top — has the same treatment: presets, or render your own.
+
+<table>
+<tr>
+<td align="center" width="33%">
+<img src="playhead-line.svg" width="176" alt="Line preset: a thin solid white vertical line" />
+<br /><sub><code>'line'</code> (default)</sub>
+</td>
+<td align="center" width="33%">
+<img src="playhead-thick.svg" width="176" alt="Thick preset: a wider solid white vertical line" />
+<br /><sub><code>'thick'</code></sub>
+</td>
+<td align="center" width="33%">
+<img src="playhead-dashed.svg" width="176" alt="Dashed preset: a dashed white vertical line" />
+<br /><sub><code>'dashed'</code></sub>
+</td>
+</tr>
+<tr>
+<td align="center" width="33%">
+<img src="playhead-glow.svg" width="176" alt="Glow preset: a white vertical line with a soft halo" />
+<br /><sub><code>'glow'</code></sub>
+</td>
+<td align="center" width="33%">
+<img src="playhead-none.svg" width="176" alt="None preset: no line at all" />
+<br /><sub><code>'none'</code></sub>
+</td>
+<td align="center" width="33%">
+<img src="playhead-custom.svg" width="176" alt="Custom example: a pink zig-zag pulse rendered via renderPlayhead instead of a straight line" />
+<br /><sub><code>renderPlayhead</code> — anything you want</sub>
+</td>
+</tr>
+</table>
+
+```tsx
+<Waveform playheadPreset="glow" />
+<Waveform playheadWidth={4} playheadPreset="dashed" />
+
+// renderPlayhead fully replaces the line. This is the zig-zag pictured above.
+<Waveform
+  renderPlayhead={({ color, width, height }) => (
+    <Svg width={16} height={height}>
+      <Polyline
+        points="8,0 14,9 2,18 14,27 2,36 14,45 8,54"
+        fill="none" stroke={color} strokeWidth={width} strokeLinecap="round" strokeLinejoin="round"
+      />
+    </Svg>
+  )}
+/>
+```
 
 ## How the sync works
 
@@ -186,4 +334,30 @@ Untested. It needs a native build, so Expo Go is out; a development build with p
 
 ## License
 
-MIT
+MIT License © 2026 Muhammad Arshad. Released under the [MIT License](LICENSE).
+
+```text
+MIT License
+
+Copyright (c) 2026 Muhammad Arshad
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+<p align="center"><img src="footer.svg" alt="because a 40-minute recording shouldn't look like a flat line" width="800" /></p>

@@ -1,0 +1,22 @@
+<svg width="800" height="148" viewBox="0 0 800 148" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Get react-native-waveform-view: npm install react-native-waveform-view">
+  <defs>
+    <linearGradient id="fbg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#131D6A"/>
+      <stop offset="1" stop-color="#0E144D"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0.5" y="0.5" width="799" height="147" rx="18" fill="url(#fbg)" stroke="#2A3374"/>
+
+  <g transform="translate(281.5, 26)">
+    <path d="M1.5 -1.5V1.5M8.5 -2.7V2.7M15.5 -2.8V2.8M22.5 -4.6V4.6M29.5 -5.2V5.2M36.5 -5.7V5.7M43.5 -4.0V4.0M50.5 -3.8V3.8M57.5 -5.4V5.4M64.5 -6.8V6.8M71.5 -4.6V4.6M78.5 -5.2V5.2M85.5 -4.1V4.1M92.5 -4.8V4.8M99.5 -3.9V3.9M106.5 -2.3V2.3M113.5 -2.0V2.0M120.5 -1.5V1.5M127.5 -1.9V1.9M134.5 -1.9V1.9M141.5 -1.6V1.6M148.5 -1.5V1.5M155.5 -2.5V2.5M162.5 -2.5V2.5M169.5 -3.7V3.7M176.5 -5.2V5.2M183.5 -5.2V5.2M190.5 -4.5V4.5M197.5 -3.9V3.9M204.5 -7.6V7.6M211.5 -5.8V5.8M218.5 -8.0V8.0M225.5 -4.3V4.3M232.5 -6.7V6.7" stroke="#4C5A99" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.8"/>
+  </g>
+
+  <text x="400.0" y="56" text-anchor="middle" font-family="ui-sans-serif, -apple-system, Segoe UI, sans-serif" font-size="19" font-weight="700" fill="#F8FAFC">Get react-native-waveform-view</text>
+
+  <rect x="165.0" y="74" width="470" height="40" rx="20.0" fill="#0A1030" stroke="#334155"/>
+  <text x="187.0" y="99.0" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" fill="#A855F7">$</text>
+  <text x="203.0" y="99.0" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" fill="#E2E8F0">npm install react-native-waveform-view</text>
+
+  <text x="400.0" y="132" text-anchor="middle" font-family="ui-sans-serif, -apple-system, Segoe UI, sans-serif" font-size="12.5" fill="#94A3B8">MIT licensed  ·  Android &amp; iOS  ·  0 runtime dependencies</text>
+</svg>

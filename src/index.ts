@@ -1,9 +1,11 @@
-export { default as Waveform, DEFAULT_WAVEFORM_GRADIENT } from './Waveform';
+export { default as Waveform, DEFAULT_WAVEFORM_GRADIENT, resampleDetail } from './Waveform';
 export type {
   WaveformProps,
   WaveformGradient,
   WaveformGradientConfig,
   WaveformGradientStop,
+  WaveformHandlePreset,
+  WaveformPlayheadPreset,
 } from './Waveform';
 export {
   decodeWaveform,

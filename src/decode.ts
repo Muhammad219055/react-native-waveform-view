@@ -74,12 +74,16 @@ export function decodeWaveform(path: string, options: DecodeOptions = {}): Promi
 
   const request = (async () => {
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let timedOut = false;
     try {
       const decoded: unknown = await Promise.race([
         native.getWaveform(path, bins, quick),
         new Promise((_, reject) => {
           timer = setTimeout(
-            () => reject(new Error('Waveform decode timed out')),
+            () => {
+              timedOut = true;
+              reject(new Error('Waveform decode timed out'));
+            },
             quick ? QUICK_TIMEOUT_MS : FULL_TIMEOUT_MS,
           );
         }),
@@ -92,6 +96,21 @@ export function decodeWaveform(path: string, options: DecodeOptions = {}): Promi
       };
       if (!quick) cache.set(path, waveform);
       return waveform;
+    } catch (err) {
+      // A timeout only means we stopped waiting — without this, the native
+      // decode keeps running on its executor thread and blocks every decode
+      // requested after it until it finishes on its own, sometimes minutes
+      // later. cancelWaveform actually stops it. Best-effort: an older
+      // native build without this method must not turn a timeout into an
+      // unrelated crash.
+      if (timedOut) {
+        try {
+          native.cancelWaveform?.(path, bins, quick);
+        } catch {
+          // Nothing more we can do from here.
+        }
+      }
+      throw err;
     } finally {
       if (timer) clearTimeout(timer);
     }

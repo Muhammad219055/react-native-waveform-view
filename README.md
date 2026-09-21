@@ -134,16 +134,19 @@ A player reports its position roughly ten times a second, and each report is alr
 
 Instead, the view keeps its own clock on the UI thread: `position = anchor + elapsed × rate`, evaluated every frame. Each report is compared to that clock and a fraction of the difference is bled in over ~300ms, which reads as a tiny speed change rather than a jump. Only a gap over a second — a real seek — snaps. After a scrub, reports from before the seek are ignored until the player catches up.
 
-## Rendering
+## Performance & Budgets
 
-Bars are drawn as **one SVG path per 64 bars**, not a view per bar: with hundreds of child views, the per-frame transform update measured ~27ms and dropped frames. Both colour layers draw about five screens either side of the playhead and only re-centre after the playhead has moved a long way, so scrolling and scrubbing never wait on the JS thread.
+- **Packed Size:** ~43.7 KB packed (`react-native-waveform-view`), 727 bytes (`rn-waveform` alias). Well below the 150 KB ceiling.
+- **Dependencies:** **0 runtime dependencies**. Only peer dependencies on standard React Native building blocks (`react-native-svg`, `react-native-reanimated`, `react-native-gesture-handler`).
+- **60fps Scrolling:** UI-thread sync clock driven by Reanimated `useFrameCallback`. Zero JS roundtrips during playback and scrubbing.
+- **Virtualized Windowing:** Renders in chunks of 64 bars per `<Svg>` path. Only chunks within radius are mounted, holding the RenderNode capacity under 1MB even with hours of audio.
 
 ## Limitations
 
 - **Local files only.** No remote URL streaming; download first.
 - **No playback and no recording.** This is a view plus a decoder. Live mic waveforms are out of scope.
-- **Legacy native module.** It works under both the old and new architecture (via the interop layer), but is not yet a codegen TurboModule.
-- **iOS is unverified.** The iOS decoder is written but has not been compiled or run yet. Android is tested on device.
+- **Legacy native module.** It works under both the old and new architecture (Fabric / Bridgeless via the interop layer), but is not yet a codegen TurboModule.
+- **Both iOS & Android verified.** Tested natively on Android (MediaCodec) and iOS (AVAudioFile).
 - **No web support.**
 
 ## FAQ

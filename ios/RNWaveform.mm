@@ -1,6 +1,18 @@
 #import <AVFoundation/AVFoundation.h>
 #import <React/RCTBridgeModule.h>
 
+static NSURL *ResolveAudioURL(NSString *path) {
+  if (!path || path.length == 0) return nil;
+  if ([path hasPrefix:@"file://"]) {
+    NSURL *url = [NSURL URLWithString:path];
+    if (url && url.path) return url;
+    NSString *cleanPath = [path substringFromIndex:7];
+    cleanPath = [cleanPath stringByRemovingPercentEncoding];
+    return [NSURL fileURLWithPath:cleanPath ?: @""];
+  }
+  return [NSURL fileURLWithPath:path];
+}
+
 @interface RNWaveform : NSObject <RCTBridgeModule>
 @end
 
@@ -15,7 +27,7 @@ RCT_REMAP_METHOD(getDurationSeconds,
                  rejecter:(RCTPromiseRejectBlock)reject)
 {
   dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
-    NSURL *url = [path hasPrefix:@"file://"] ? [NSURL URLWithString:path] : [NSURL fileURLWithPath:path];
+    NSURL *url = ResolveAudioURL(path);
     NSError *error = nil;
     AVAudioFile *file = [[AVAudioFile alloc] initForReading:url error:&error];
     if (!file || file.processingFormat.sampleRate <= 0) {
@@ -38,7 +50,7 @@ RCT_REMAP_METHOD(getWaveform,
   }
   dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
     @autoreleasepool {
-      NSURL *url = [path hasPrefix:@"file://"] ? [NSURL URLWithString:path] : [NSURL fileURLWithPath:path];
+      NSURL *url = ResolveAudioURL(path);
       NSError *error = nil;
       AVAudioFile *file = [[AVAudioFile alloc] initForReading:url commonFormat:AVAudioPCMFormatFloat32 interleaved:NO error:&error];
       if (!file || file.length <= 0) {

@@ -3,4 +3,5 @@ module.exports = {
   transformIgnorePatterns: [
     'node_modules/(?!(jest-)?react-native|@react-native)',
   ],
+  testPathIgnorePatterns: ['/node_modules/', '/example/', '/lib/'],
 };

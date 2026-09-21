@@ -203,6 +203,32 @@ describe('decodeWaveform & getDurationSeconds', () => {
     await expect(decodePromise).rejects.toThrow('Waveform decode timed out');
   });
 
+  it('cancels the native decode when it times out, so it stops blocking later requests', async () => {
+    jest.useFakeTimers();
+    const mockNative = {
+      getWaveform: jest.fn().mockReturnValue(new Promise(() => {})), // never resolves
+      cancelWaveform: jest.fn(),
+    };
+    NativeModules.RNWaveform = mockNative;
+
+    const decodePromise = decodeWaveform('file:///hang.mp3', { quick: true });
+    jest.advanceTimersByTime(16000); // quick timeout is 15000ms
+
+    await expect(decodePromise).rejects.toThrow('Waveform decode timed out');
+    expect(mockNative.cancelWaveform).toHaveBeenCalledWith('file:///hang.mp3', DEFAULT_BINS, true);
+  });
+
+  it('does not cancel on an ordinary rejection — only a timeout means the caller stopped waiting', async () => {
+    const mockNative = {
+      getWaveform: jest.fn().mockRejectedValue(new Error('boom')),
+      cancelWaveform: jest.fn(),
+    };
+    NativeModules.RNWaveform = mockNative;
+
+    await expect(decodeWaveform('file:///boom.mp3')).rejects.toThrow('boom');
+    expect(mockNative.cancelWaveform).not.toHaveBeenCalled();
+  });
+
   it('retrieves duration in seconds', async () => {
     const mockNative = {
       getDurationSeconds: jest.fn().mockResolvedValue(123.45),

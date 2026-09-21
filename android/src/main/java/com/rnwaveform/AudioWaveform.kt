@@ -19,8 +19,12 @@ import kotlin.math.sqrt
  * Loudness is measured per 20ms slice in dB and averaged per bar: averaging
  * raw energy lets loud syllables dominate and hides pauses between sentences.
  *
- * Two modes, because the platform decoder (not our code) is the bottleneck —
- * roughly 25x real time for MP3 on slower devices:
+ * Two modes, because the platform decoder is the bottleneck — not on compute,
+ * but on IPC latency to the codec process: a single decode thread spends most
+ * of its time (measured ~85%) blocked on `dequeueOutputBuffer`, not running,
+ * so throughput scales by overlapping waits across threads rather than by
+ * spreading CPU work (measured: 1 segment ~29x real time, 4 segments ~78x, on
+ * one 3-minute file — see Research-decode-latency.md in the repo root):
  *  - [readQuick]: decodes a 200ms window at each bar's position. About a
  *    second even for hour-long files; shown immediately, never stored.
  *  - [read]: decodes the whole file, split across parallel decoders on
@@ -44,8 +48,17 @@ object AudioWaveform {
     val detailCount = ((durationUs + DETAIL_US - 1) / DETAIL_US).toInt().coerceAtLeast(1)
     // Each decoder owns its own accumulators (summed afterwards), so the
     // parallel segments never write shared memory.
+    //
+    // The cap is `cores`, not `cores - 1`: segment threads spend most of
+    // their time blocked on the codec process, not running, so they are not
+    // competing with the rest of the app for CPU the way a compute-bound
+    // thread would. Reserving a core for "everything else" measured as a
+    // 1.6x loss (2 segments instead of 4 on a 4-core device) for no
+    // measurable smoothness gain. Going past 4 measured worse (thread
+    // contention with only 4 cores to actually overlap on), so the ceiling
+    // stays at the highest option below.
     val cores = Runtime.getRuntime().availableProcessors()
-    val segments = listOf(4, 2, 1).first { it <= max(1, cores - 1) && durationUs / it >= MIN_SEGMENT_US || it == 1 }
+    val segments = listOf(4, 2, 1).first { it <= max(1, cores) && durationUs / it >= MIN_SEGMENT_US || it == 1 }
     val sums = Array(segments) { DoubleArray(count) }
     val slices = Array(segments) { IntArray(count) }
     val detailSums = Array(segments) { DoubleArray(detailCount) }

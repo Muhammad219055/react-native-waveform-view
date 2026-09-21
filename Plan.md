@@ -84,18 +84,18 @@ single most likely source of schedule slip, which is why it comes before polish.
 
 Currently 4 component tests. The decoding and state layers have none.
 
-- [ ] `decode.ts`: timeout, in-flight dedupe, cache hit, invalid payload rejection,
+- [x] `decode.ts`: timeout, in-flight dedupe, cache hit, invalid payload rejection,
       missing-native-module error
-- [ ] `normalize.ts`: silence floor, loud/quiet files normalizing alike, huge arrays
+- [x] `normalize.ts`: silence floor, loud/quiet files normalizing alike, huge arrays
       (no spread-argument limit)
-- [ ] `useWaveform.ts`: quick-then-full ordering, late quick never overwrites full,
+- [x] `useWaveform.ts`: quick-then-full ordering, late quick never overwrites full,
       `stored` renders on first frame, path change mid-flight
-- [ ] `Waveform.tsx`: the sync clock — drive the frame callback with fake timestamps
+- [x] `Waveform.tsx`: the sync clock — drive the frame callback with fake timestamps
       and assert the position tracks, corrects smoothly, snaps only on a real seek,
       and ignores stale reports after a scrub
 - [ ] Native parity script from Phase 2, kept as a fixture test
 
-**Done when:** every exported function has tests and the sync clock is covered.
+**Done when:** every exported function has tests and the sync clock is covered (VERIFIED: 31 tests, 95.14% coverage).
 The clock is the hardest part of the library and the part with no coverage today.
 
 ## Phase 4 — Performance and memory

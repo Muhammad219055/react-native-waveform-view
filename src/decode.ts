@@ -1,6 +1,6 @@
 import { NativeModules } from 'react-native';
 
-const native = NativeModules.RNWaveform;
+const getNative = () => NativeModules.RNWaveform;
 
 /**
  * Loudness levels on 0..1, where 0 is -80 dBFS and 1 is 0 dBFS.
@@ -57,6 +57,7 @@ export type DecodeOptions = {
  */
 export function decodeWaveform(path: string, options: DecodeOptions = {}): Promise<WaveformData> {
   const { quick = false, bins = DEFAULT_BINS } = options;
+  const native = getNative();
   if (!native) {
     return Promise.reject(
       new Error(
@@ -102,6 +103,7 @@ export function decodeWaveform(path: string, options: DecodeOptions = {}): Promi
 
 /** Duration in seconds, read from the file's metadata. */
 export function getDurationSeconds(path: string): Promise<number> {
+  const native = getNative();
   if (!native) return Promise.reject(new Error('rn-waveform: native module not found.'));
   return native.getDurationSeconds(path);
 }

@@ -136,7 +136,11 @@ export function DecodeOnOpenScreen() {
             isSeeking={isSeeking}
             onSeekStart={() => setIsSeeking(true)}
             onSeekEnd={handleSeekEnd}
-            playedColor="#3303f5ff"
+            playedGradient={{
+              flat: '#EAB308',
+              normal: '#22C55E',
+              peak: '#EF4444',
+            }}
             upcomingColor="#334155"
             fadeColor="#0F172A"
           />

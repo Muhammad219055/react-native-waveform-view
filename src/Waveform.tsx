@@ -43,6 +43,128 @@ const SNAP_MS = 1000;
 const NUDGE = 0.2;
 const CORRECTION_MS = 300;
 
+export type WaveformGradientStop = { level: number; color: string };
+
+export type WaveformGradientConfig = {
+  /** Color for flatter / quiet audio sections (levels near 0.0). Defaults to #EAB308 (yellow). */
+  flat?: string;
+  /** Color for normal speech / mid amplitude (levels around 0.3 - 0.6). Defaults to #22C55E (green). */
+  normal?: string;
+  /** Color for high intensity / peak voice (levels above 0.7). Defaults to #EF4444 (red). */
+  peak?: string;
+  /** Custom explicit stops mapped to 0..1 amplitude levels. */
+  stops?: WaveformGradientStop[];
+};
+
+export type WaveformGradient = boolean | WaveformGradientConfig | WaveformGradientStop[] | string[];
+
+export const DEFAULT_WAVEFORM_GRADIENT: WaveformGradientConfig = {
+  flat: '#EAB308',   // Flatter frequency -> Yellow
+  normal: '#22C55E', // Normal voice bars -> Green
+  peak: '#EF4444',   // High pitch/loud voice -> Red
+};
+
+function parseColor(color: string): [number, number, number, number] {
+  if (color.startsWith('#')) {
+    let hex = color.slice(1);
+    if (hex.length === 3 || hex.length === 4) {
+      hex = hex.split('').map(c => c + c).join('');
+    }
+    if (hex.length === 6) {
+      return [
+        parseInt(hex.slice(0, 2), 16),
+        parseInt(hex.slice(2, 4), 16),
+        parseInt(hex.slice(4, 6), 16),
+        1,
+      ];
+    }
+    if (hex.length === 8) {
+      return [
+        parseInt(hex.slice(0, 2), 16),
+        parseInt(hex.slice(2, 4), 16),
+        parseInt(hex.slice(4, 6), 16),
+        parseInt(hex.slice(6, 8), 16) / 255,
+      ];
+    }
+  } else if (color.startsWith('rgb')) {
+    const match = color.match(/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\s*\)/);
+    if (match) {
+      return [
+        parseFloat(match[1]),
+        parseFloat(match[2]),
+        parseFloat(match[3]),
+        match[4] !== undefined ? parseFloat(match[4]) : 1,
+      ];
+    }
+  }
+  return [255, 255, 255, 1];
+}
+
+function interpolateColor(colorA: string, colorB: string, t: number): string {
+  const [r1, g1, b1, a1] = parseColor(colorA);
+  const [r2, g2, b2, a2] = parseColor(colorB);
+  const clamped = Math.max(0, Math.min(1, t));
+  const r = Math.round(r1 + (r2 - r1) * clamped);
+  const g = Math.round(g1 + (g2 - g1) * clamped);
+  const b = Math.round(b1 + (b2 - b1) * clamped);
+  const a = a1 + (a2 - a1) * clamped;
+  if (a >= 0.999) {
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+  }
+  return `rgba(${r},${g},${b},${a.toFixed(2)})`;
+}
+
+export function resolveGradientStops(gradient: WaveformGradient | undefined): WaveformGradientStop[] | null {
+  if (!gradient) return null;
+  if (gradient === true) {
+    return [
+      { level: 0.0, color: DEFAULT_WAVEFORM_GRADIENT.flat! },
+      { level: 0.4, color: DEFAULT_WAVEFORM_GRADIENT.normal! },
+      { level: 0.8, color: DEFAULT_WAVEFORM_GRADIENT.peak! },
+    ];
+  }
+  if (Array.isArray(gradient)) {
+    if (gradient.length === 0) return null;
+    if (typeof gradient[0] === 'string') {
+      const colors = gradient as string[];
+      if (colors.length === 1) return [{ level: 0.0, color: colors[0] }, { level: 1.0, color: colors[0] }];
+      return colors.map((color, idx) => ({
+        level: idx / (colors.length - 1),
+        color,
+      }));
+    }
+    return [...(gradient as WaveformGradientStop[])].sort((a, b) => a.level - b.level);
+  }
+  if (typeof gradient === 'object') {
+    if (gradient.stops && gradient.stops.length > 0) {
+      return [...gradient.stops].sort((a, b) => a.level - b.level);
+    }
+    return [
+      { level: 0.0, color: gradient.flat ?? DEFAULT_WAVEFORM_GRADIENT.flat! },
+      { level: 0.4, color: gradient.normal ?? DEFAULT_WAVEFORM_GRADIENT.normal! },
+      { level: 0.8, color: gradient.peak ?? DEFAULT_WAVEFORM_GRADIENT.peak! },
+    ];
+  }
+  return null;
+}
+
+export function sampleGradientColor(stops: WaveformGradientStop[], level: number): string {
+  if (stops.length === 0) return '#FFFFFF';
+  const clamped = Math.max(0, Math.min(1, level));
+  if (clamped <= stops[0].level) return stops[0].color;
+  if (clamped >= stops[stops.length - 1].level) return stops[stops.length - 1].color;
+  for (let i = 0; i < stops.length - 1; i++) {
+    const s1 = stops[i];
+    const s2 = stops[i + 1];
+    if (clamped >= s1.level && clamped <= s2.level) {
+      const span = s2.level - s1.level;
+      const t = span <= 0 ? 0 : (clamped - s1.level) / span;
+      return interpolateColor(s1.color, s2.color, t);
+    }
+  }
+  return stops[stops.length - 1].color;
+}
+
 export type WaveformProps = {
   /** Normalized levels (0..1), one per `detailMs`. See `useWaveform().detail`. */
   detail: readonly number[];
@@ -63,8 +185,16 @@ export type WaveformProps = {
   style?: StyleProp<ViewStyle>;
   /** Bars behind the playhead. */
   playedColor?: string;
+  /**
+   * Gradient for played bars across the horizontal timeline.
+   * Can be true for default colors (yellow -> green -> red),
+   * an object with `{ flat, normal, peak }`, or an array of stops/colors.
+   */
+  playedGradient?: WaveformGradient;
   /** Bars ahead of the playhead. */
   upcomingColor?: string;
+  /** Gradient for upcoming bars across the horizontal timeline. */
+  upcomingGradient?: WaveformGradient;
   playheadColor?: string;
   /**
    * Colour the edges fade into — set this to the background behind the view.
@@ -91,28 +221,65 @@ type ChunkProps = {
   index: number;
   detail: readonly number[];
   color: string;
+  gradientStops: WaveformGradientStop[] | null;
+  idPrefix: string;
   height: number;
   barWidth: number;
   pitch: number;
 };
 
-const Chunk = memo(({ index, detail, color, height, barWidth, pitch }: ChunkProps) => {
+const Chunk = memo(({ index, detail, color, gradientStops, idPrefix, height, barWidth, pitch }: ChunkProps) => {
   const start = index * CHUNK;
   const end = Math.min(detail.length, start + CHUNK);
   if (start < 0 || start >= end) return null;
   // Round caps extend each line by half the stroke width at both ends.
   const cap = barWidth / 2;
+  const chunkWidth = CHUNK * pitch;
+  const gradientId = `grad_${idPrefix}_${index}`;
   let d = '';
+  const stops: React.ReactElement[] = [];
+
+  let firstColor = '';
+  let lastColor = '';
+
   for (let i = start; i < end; i++) {
     const barHeight = barWidth + (height - barWidth * 2 - 1) * detail[i];
     const top = (height - barHeight) / 2 + cap;
     const bottom = Math.max(top, top + barHeight - barWidth);
     const x = (i - start) * pitch + cap;
     d += `M${x.toFixed(1)} ${top.toFixed(1)}V${bottom.toFixed(1)}`;
+
+    if (gradientStops) {
+      const barColor = sampleGradientColor(gradientStops, detail[i]);
+      if (i === start) {
+        firstColor = barColor;
+        stops.push(<Stop key="start" offset="0%" stopColor={firstColor} />);
+      }
+      lastColor = barColor;
+      const offsetPct = Math.min(100, Math.max(0, (x / chunkWidth) * 100)).toFixed(2) + '%';
+      stops.push(<Stop key={i} offset={offsetPct} stopColor={barColor} />);
+    }
   }
+
+  if (gradientStops && lastColor) {
+    stops.push(<Stop key="end" offset="100%" stopColor={lastColor} />);
+  }
+
   return (
-    <Svg style={[styles.chunk, { left: start * pitch }]} width={CHUNK * pitch} height={height}>
-      <Path d={d} stroke={color} strokeWidth={barWidth} strokeLinecap="round" />
+    <Svg style={[styles.chunk, { left: start * pitch }]} width={chunkWidth} height={height}>
+      {gradientStops && (
+        <Defs>
+          <LinearGradient id={gradientId} x1="0" y1="0" x2={chunkWidth} y2="0" gradientUnits="userSpaceOnUse">
+            {stops}
+          </LinearGradient>
+        </Defs>
+      )}
+      <Path
+        d={d}
+        stroke={gradientStops ? `url(#${gradientId})` : color}
+        strokeWidth={barWidth}
+        strokeLinecap="round"
+      />
     </Svg>
   );
 });
@@ -139,7 +306,9 @@ export default function Waveform({
   onSeekEnd,
   style,
   playedColor = '#A855F7',
+  playedGradient,
   upcomingColor = '#E5E7EB',
+  upcomingGradient,
   playheadColor = '#FFFFFF',
   fadeColor,
   fadeWidth = 64,
@@ -325,6 +494,8 @@ export default function Waveform({
   // Both layers need bars on both sides: the split point moves with the
   // playhead, so scrubbing back uncovers grey bars behind it and vice versa.
   const chunks = useMemo(() => chunkRange(center - RADIUS, center + RADIUS, detail.length), [center, detail.length]);
+  const playedStops = useMemo(() => resolveGradientStops(playedGradient), [playedGradient]);
+  const upcomingStops = useMemo(() => resolveGradientStops(upcomingGradient), [upcomingGradient]);
 
   return (
     <GestureDetector gesture={gesture}>
@@ -334,14 +505,34 @@ export default function Waveform({
             <View style={[styles.half, { width: half, height }]}>
               <Animated.View style={[styles.track, { left: half, height }, trackStyle]}>
                 {chunks.map(i => (
-                  <Chunk key={i} index={i} detail={detail} color={playedColor} height={height} barWidth={barWidth} pitch={pitch} />
+                  <Chunk
+                    key={i}
+                    index={i}
+                    detail={detail}
+                    color={playedColor}
+                    gradientStops={playedStops}
+                    idPrefix="p"
+                    height={height}
+                    barWidth={barWidth}
+                    pitch={pitch}
+                  />
                 ))}
               </Animated.View>
             </View>
             <View style={[styles.half, { left: half, width: half, height }]}>
               <Animated.View style={[styles.track, styles.trackStart, { height }, trackStyle]}>
                 {chunks.map(i => (
-                  <Chunk key={i} index={i} detail={detail} color={upcomingColor} height={height} barWidth={barWidth} pitch={pitch} />
+                  <Chunk
+                    key={i}
+                    index={i}
+                    detail={detail}
+                    color={upcomingColor}
+                    gradientStops={upcomingStops}
+                    idPrefix="u"
+                    height={height}
+                    barWidth={barWidth}
+                    pitch={pitch}
+                  />
                 ))}
               </Animated.View>
             </View>

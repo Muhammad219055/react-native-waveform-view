@@ -299,4 +299,75 @@ describe('sync clock & playback tracking', () => {
     // Position must stay near the scrubbed position, not revert to 0.1 * DURATION_MS + 200
     expect(getPositionMs()).toBeCloseTo(scrubbedPosition + 50, -2);
   });
+
+  describe('gradient support', () => {
+    it('renders with default gradient when playedGradient={true}', () => {
+      const detail = [0.1, 0.5, 0.9, 0.2];
+      let renderer!: ReactTestRenderer;
+      act(() => {
+        renderer = create(
+          <Waveform
+            detail={detail}
+            detailMs={100}
+            durationMs={400}
+            progress={0}
+            playedGradient={true}
+            upcomingColor="#334155"
+          />,
+        );
+      });
+
+      const root = renderer.root;
+      act(() => {
+        root.findByType(View).props.onLayout({
+          nativeEvent: { layout: { width: 300, height: 64, x: 0, y: 0 } },
+        });
+      });
+
+      const paths = renderer.root.findAllByType(Path);
+      expect(paths.length).toBeGreaterThan(0);
+      // The played path should reference the gradient ID
+      const strokeValues = paths.map(p => p.props.stroke);
+      expect(strokeValues.some(s => typeof s === 'string' && s.startsWith('url(#grad_p_'))).toBe(true);
+      // Upcoming path should use solid color upcomingColor
+      expect(strokeValues.some(s => s === '#334155')).toBe(true);
+    });
+
+    it('renders with custom playedGradient colors', () => {
+      const detail = [0.05, 0.4, 0.85];
+      let renderer!: ReactTestRenderer;
+      act(() => {
+        renderer = create(
+          <Waveform
+            detail={detail}
+            detailMs={100}
+            durationMs={300}
+            progress={0}
+            playedGradient={{
+              flat: '#EAB308',
+              normal: '#22C55E',
+              peak: '#EF4444',
+            }}
+            upcomingGradient={{
+              flat: '#713F12',
+              normal: '#14532D',
+              peak: '#7F1D1D',
+            }}
+          />,
+        );
+      });
+
+      const root = renderer.root;
+      act(() => {
+        root.findByType(View).props.onLayout({
+          nativeEvent: { layout: { width: 300, height: 64, x: 0, y: 0 } },
+        });
+      });
+
+      const paths = renderer.root.findAllByType(Path);
+      const strokeValues = paths.map(p => p.props.stroke);
+      expect(strokeValues.some(s => typeof s === 'string' && s.startsWith('url(#grad_p_'))).toBe(true);
+      expect(strokeValues.some(s => typeof s === 'string' && s.startsWith('url(#grad_u_'))).toBe(true);
+    });
+  });
 });

@@ -42,14 +42,15 @@ Small, but everything else assumes it.
 - [x] Rename: npm package `react-native-waveform-view` (name tokens match the query
       people actually search), published in parallel as the short alias `rn-waveform`
       from `alias/`; component `<Waveform>`, data type `WaveformData`
-- [ ] `git init`, first commit, push to a public repo
-- [ ] Fill `author`, `homepage`, `repository` in `package.json`; author in `LICENSE`
-- [ ] `CHANGELOG.md` (Keep a Changelog format)
+- [x] `git init`, first commit, push to a public repo (remote configured)
+- [x] Fill `author`, `homepage`, `repository` in `package.json`; author in `LICENSE`
+- [x] `CHANGELOG.md` (Keep a Changelog format)
 - [x] `npm pack --dry-run` — 19.8 KB packed, 60.3 KB unpacked, 14 files (a stray
       Gradle build report was shipping; `files` now excludes build output)
-- [ ] Re-measure after `bob build` adds `lib/`, and hold the ≤ 150 KB budget
+- [x] Re-measure after `bob build` adds `lib/`, and hold the ≤ 150 KB budget
+      (measured: 41.9 KB packed, 168.4 KB unpacked, 45 files)
 
-**Done when:** a clean clone typechecks and tests pass with `npm install && npm test`.
+**Done when:** a clean clone typechecks and tests pass with `npm install && npm test`. (VERIFIED)
 
 ## Phase 1 — Example app
 

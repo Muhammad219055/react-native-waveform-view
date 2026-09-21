@@ -4,7 +4,7 @@
   "description": "React Native audio waveform view: a scrolling waveform scrubber with native waveform data extraction on Android and iOS. Seek and scrub long audio with any player.",
   "main": "lib/commonjs/index.js",
   "module": "lib/module/index.js",
-  "types": "lib/typescript/src/index.d.ts",
+  "types": "lib/typescript/index.d.ts",
   "react-native": "src/index.ts",
   "source": "src/index.ts",
   "files": [

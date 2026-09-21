@@ -24,7 +24,7 @@ class RNWaveformModule(private val context: ReactApplicationContext) : ReactCont
   // fully block a second, unrelated one either. Decode is latency-bound —
   // mostly waiting on the codec process, not running — so concurrent decodes
   // overlap their waits rather than fight over cores: three at once each
-  // measured ~2x slower, not a pileup (Research-decode-latency.md).
+  // measured ~2x slower, not a pileup (docs/Research-decode-latency.md).
   private val waveformExecutor = Executors.newFixedThreadPool(2)
   private val quickWaveformExecutor = Executors.newSingleThreadExecutor()
 

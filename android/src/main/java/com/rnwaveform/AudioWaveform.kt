@@ -24,7 +24,7 @@ import kotlin.math.sqrt
  * of its time (measured ~85%) blocked on `dequeueOutputBuffer`, not running,
  * so throughput scales by overlapping waits across threads rather than by
  * spreading CPU work (measured: 1 segment ~29x real time, 4 segments ~78x, on
- * one 3-minute file — see Research-decode-latency.md in the repo root):
+ * one 3-minute file — see docs/Research-decode-latency.md):
  *  - [readQuick]: decodes a 200ms window at each bar's position. About a
  *    second even for hour-long files; shown immediately, never stored.
  *  - [read]: decodes the whole file, split across parallel decoders on
